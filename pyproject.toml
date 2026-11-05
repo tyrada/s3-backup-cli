@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "s3-backup-cli"
+version = "0.1.0"
+description = "Manifest-based S3 folder backup and verified safe restore CLI"
+requires-python = ">=3.11"
+dependencies = ["boto3>=1.35,<2"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "pytest-cov>=6,<7"]
+
+[project.scripts]
+s3-backup = "s3_backup.cli:main"
+generate-backup-sample = "s3_backup.generator:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
