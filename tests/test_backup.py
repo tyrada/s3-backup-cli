@@ -3,9 +3,12 @@ from __future__ import annotations
 from io import BytesIO
 import json
 from pathlib import Path
+import sys
 
 import pytest
+from botocore.exceptions import ClientError
 
+from s3_backup import cli
 from s3_backup.generator import generate_sample
 from s3_backup.manifest import ManifestError, build_manifest, sha256_bytes
 from s3_backup.storage import BackupVerificationError, list_backup, restore_backup, upload_backup
@@ -89,3 +92,22 @@ def test_hash_mismatch_is_rejected_before_file_write(tmp_path):
     with pytest.raises(BackupVerificationError, match="does not match"):
         restore_backup(destination, "bucket", "prefix", client)
     assert not (destination / "file.txt").exists()
+
+
+def test_cli_success_input_failure_and_aws_failure_exit_codes(monkeypatch, tmp_path):
+    source = tmp_path / "source"
+    generate_sample(source)
+    client = MockS3()
+    monkeypatch.setattr(cli.boto3, "client", lambda service: client)
+    monkeypatch.setattr(sys, "argv", ["s3-backup", "upload", "--source", str(source), "--bucket", "bucket", "--prefix", "prefix", "--dry-run"])
+    assert cli.main() == cli.EXIT_SUCCESS
+
+    monkeypatch.setattr(sys, "argv", ["s3-backup", "upload", "--source", str(tmp_path / "missing"), "--bucket", "bucket", "--prefix", "prefix"])
+    assert cli.main() == cli.EXIT_INPUT_OR_VERIFICATION
+
+    def deny(_service):
+        raise ClientError({"Error": {"Code": "AccessDenied", "Message": "denied"}}, "ListObjectsV2")
+
+    monkeypatch.setattr(cli.boto3, "client", deny)
+    monkeypatch.setattr(sys, "argv", ["s3-backup", "list", "--bucket", "bucket", "--prefix", "prefix"])
+    assert cli.main() == cli.EXIT_AWS_ERROR

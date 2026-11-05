@@ -26,7 +26,10 @@ def build_manifest(source: Path) -> dict[str, object]:
     if not source.is_dir():
         raise ManifestError(f"source is not a directory: {source}")
     files = []
-    for path in sorted(item for item in source.rglob("*") if item.is_file()):
+    discovered = sorted(source.rglob("*"))
+    if any(path.is_symlink() for path in discovered):
+        raise ManifestError("symbolic links are not supported in backup sources")
+    for path in (item for item in discovered if item.is_file()):
         relative = path.relative_to(source).as_posix()
         files.append({"path": relative, "size": path.stat().st_size, "sha256": sha256_file(path)})
     return {"version": 1, "files": files}
